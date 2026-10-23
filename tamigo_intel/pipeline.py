@@ -15,6 +15,7 @@ from tamigo_intel.db import Database, utc_now
 from tamigo_intel.http_client import HttpClient, HttpError
 from tamigo_intel.qualify import score_lead
 from tamigo_intel.sources.base import Discovered
+from tamigo_intel.sources.canada_buys import CanadaBuysSource
 from tamigo_intel.sources.contracts_finder import ContractsFinderSource
 from tamigo_intel.sources.github_issues import GitHubIssuesSource
 from tamigo_intel.sources.sam_gov import SamGovSource, SourceUnavailable
@@ -27,6 +28,7 @@ log = logging.getLogger("tamigo_intel")
 SOURCE_TYPES = {
     "contracts_finder": ContractsFinderSource,
     "usaspending": UsaSpendingSource,
+    "canada_buys": CanadaBuysSource,
     "ted": TedSource,
     "github_issues": GitHubIssuesSource,
     "sam_gov": SamGovSource,
@@ -115,7 +117,14 @@ def _store(db: Database, conn, item: Discovered, config: SearchConfig) -> int | 
                 "country": item.country,
             },
         )
-    contact = contact_from_discovery(org_id, item.source_url, f"{item.title}\n{item.excerpt}", item.organization_name)
+    contact = contact_from_discovery(
+        org_id,
+        item.source_url,
+        f"{item.title}\n{item.excerpt}",
+        item.organization_name,
+        email=item.contact_email,
+        name=item.contact_name,
+    )
     has_contact = False
     if contact:
         db.add_contact(conn, contact)

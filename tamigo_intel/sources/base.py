@@ -30,6 +30,8 @@ class Discovered:
     notice_status: str = ""
     currency: str = ""
     website: str = ""
+    contact_name: str = ""
+    contact_email: str = ""
     raw: dict = field(default_factory=dict)
 
     @property

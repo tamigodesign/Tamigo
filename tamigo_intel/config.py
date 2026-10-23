@@ -46,7 +46,7 @@ class SearchConfig:
     max_per_source: int = 15
     request_interval_seconds: float = 1.0
     enabled_sources: list[str] = field(
-        default_factory=lambda: ["contracts_finder", "usaspending", "ted", "github_issues"]
+        default_factory=lambda: ["contracts_finder", "usaspending", "canada_buys", "ted", "github_issues"]
     )
     excluded_names: list[str] = field(default_factory=list)
     excluded_domains: list[str] = field(default_factory=list)

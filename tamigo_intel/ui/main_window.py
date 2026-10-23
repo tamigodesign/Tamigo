@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from tamigo_intel.config import SearchConfig, load_config, save_config
+from tamigo_intel.terms import PROCUREMENT_LABELS, procurement_label
 from tamigo_intel.db import Database
 from tamigo_intel.exporting import export_csv, export_json
 from tamigo_intel.legal import hints_for
@@ -120,19 +121,22 @@ class MainWindow(QMainWindow):
         form.addRow("Pauza između zahteva (s)", self.interval)
         layout.addLayout(form)
         self.source_boxes: dict[str, QCheckBox] = {}
-        row = QHBoxLayout()
-        for name, title in (
-            ("contracts_finder", "Contracts Finder (UK)"),
-            ("usaspending", "USAspending (SAD)"),
-            ("ted", "TED (EU)"),
-            ("github_issues", "GitHub issues"),
-            ("sam_gov", "SAM.gov (traži ključ)"),
+        source_grid = QGridLayout()
+        for index, (name, title) in enumerate(
+            (
+                ("contracts_finder", "Contracts Finder (UK)"),
+                ("usaspending", "USAspending (SAD)"),
+                ("canada_buys", "CanadaBuys (Kanada)"),
+                ("ted", "TED (EU)"),
+                ("github_issues", "GitHub issues"),
+                ("sam_gov", "SAM.gov (traži ključ)"),
+            )
         ):
             box = QCheckBox(title)
             box.setChecked(name in self.config.enabled_sources)
             self.source_boxes[name] = box
-            row.addWidget(box)
-        layout.addLayout(row)
+            source_grid.addWidget(box, index // 3, index % 3)
+        layout.addLayout(source_grid)
         buttons = QHBoxLayout()
         self.start_button = QPushButton("Pokreni pretragu")
         self.stop_button = QPushButton("Zaustavi")
@@ -170,7 +174,9 @@ class MainWindow(QMainWindow):
         self.filter_format = QComboBox()
         self.filter_format.addItems(["", "pdf", "epub", "web"])
         self.filter_procurement = QComboBox()
-        self.filter_procurement.addItems(["", "open_procurement", "past_award", "closed", "none"])
+        self.filter_procurement.addItem("Sve nabavke", "")
+        for key, label in PROCUREMENT_LABELS.items():
+            self.filter_procurement.addItem(label, key)
         apply_filters = QPushButton("Filtriraj")
         apply_filters.clicked.connect(self.reload_leads)
         filters.addWidget(QLabel("Nivo"))
@@ -345,14 +351,17 @@ class MainWindow(QMainWindow):
             "min_level": self.filter_level.currentText(),
             "country": self.filter_country.text().strip(),
             "format": self.filter_format.currentText(),
-            "procurement": self.filter_procurement.currentText(),
+            "procurement": self.filter_procurement.currentData() or "",
         }
         rows = self.db.query_leads(filters)
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(rows))
         for row_index, lead in enumerate(rows):
             for column, (key, _title) in enumerate(LEAD_COLUMNS):
-                item = QTableWidgetItem(str(lead.get(key) or ""))
+                value = lead.get(key) or ""
+                if key == "procurement_signal":
+                    value = procurement_label(str(value))
+                item = QTableWidgetItem(str(value))
                 if column == 0:
                     item.setData(Qt.ItemDataRole.UserRole, lead["id"])
                 self.table.setItem(row_index, column, item)

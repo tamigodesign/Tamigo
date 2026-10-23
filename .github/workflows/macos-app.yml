@@ -1,0 +1,61 @@
+name: macOS app
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/accessibility-intelligence-0cba
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install and test
+        run: |
+          python -m pip install -r requirements.txt "pyinstaller>=6.6"
+          python -m pytest -q
+      - name: Build Finder app
+        run: bash scripts/build_macos_app.sh
+      - name: Frozen self-check and real search
+        run: |
+          set -euo pipefail
+          APP="dist/Tamigo Accessibility Intelligence.app"
+          BIN="$APP/Contents/MacOS/Tamigo Accessibility Intelligence"
+          test -x "$BIN"
+          echo "Binary: $BIN"
+          export TAMIGO_INTEL_HOME="${RUNNER_TEMP}/tamigo-home"
+          "$BIN" --self-check
+          "$BIN" --search --max-organizations 3
+          if [[ -f "${TAMIGO_INTEL_HOME}/search-result.json" ]]; then
+            echo "Search result:"
+            cat "${TAMIGO_INTEL_HOME}/search-result.json"
+          fi
+          "$BIN" --stats
+          cp "${TAMIGO_INTEL_HOME}/stats.json" "${RUNNER_TEMP}/stats-first.json"
+          "$BIN" --stats
+          python - << 'PY'
+          import json, os
+          from pathlib import Path
+          home = Path(os.environ["TAMIGO_INTEL_HOME"])
+          payload = json.loads((home / "self-check.json").read_text())
+          assert payload["frozen"] is True, payload
+          assert payload["platform"] == "darwin", payload
+          assert payload["version"] == "0.2.0"
+          first = json.loads(Path(os.environ["RUNNER_TEMP"], "stats-first.json").read_text())
+          second = json.loads((home / "stats.json").read_text())
+          print(payload)
+          print(second)
+          assert first["organizations"] >= 1, first
+          assert second["leads"] == first["leads"]
+          assert second["leads"] >= 1
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tamigo-macos
+          path: dist/Tamigo-macos.zip
+          if-no-files-found: error

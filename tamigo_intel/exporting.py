@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from tamigo_intel.db import Database
+from tamigo_intel.terms import procurement_label
 
 
 def _contact_cell(contacts: list[dict]) -> tuple[str, str]:
@@ -32,6 +33,7 @@ def export_json(db: Database, destination: Path, qualified_only: bool = False) -
                 "evidence_level": lead["evidence_level"],
                 "total_score": lead["total_score"],
                 "procurement_signal": lead["procurement_signal"],
+                "evidence_timing": procurement_label(lead["procurement_signal"]),
                 "formats": lead["formats"],
                 "verification_status": lead["verification_status"],
                 "compliance_judgment": lead["compliance_judgment"],
@@ -68,6 +70,7 @@ def export_csv(db: Database, destination: Path, qualified_only: bool = False) ->
         "evidence_level",
         "total_score",
         "procurement_signal",
+        "evidence_timing",
         "formats",
         "verification_status",
         "email",
@@ -95,6 +98,7 @@ def export_csv(db: Database, destination: Path, qualified_only: bool = False) ->
                     "evidence_level": lead["evidence_level"],
                     "total_score": lead["total_score"],
                     "procurement_signal": lead["procurement_signal"],
+                    "evidence_timing": procurement_label(lead["procurement_signal"]),
                     "formats": lead["formats"],
                     "verification_status": lead["verification_status"],
                     "email": email,

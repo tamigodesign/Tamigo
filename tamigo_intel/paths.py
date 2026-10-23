@@ -5,6 +5,21 @@ import sys
 from pathlib import Path
 
 
+def is_frozen() -> bool:
+    """True kada je program spakovan (PyInstaller), ne kada radi iz repozitorijuma."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def bundle_dir() -> Path:
+    """Folder sa spakovanim kodom. Podaci korisnika nisu ovde."""
+    if is_frozen():
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass)
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
 def data_dir() -> Path:
     override = os.environ.get("TAMIGO_INTEL_HOME")
     if override:

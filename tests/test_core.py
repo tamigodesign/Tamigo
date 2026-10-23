@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -458,6 +459,108 @@ def test_saved_search_roundtrip(tmp_path: Path):
     with db.connect() as conn:
         raw = conn.execute("SELECT config_json FROM saved_searches").fetchone()["config_json"]
     assert json.loads(raw)["keywords"] == ["WCAG"]
+
+
+def test_past_award_is_labeled_historical(tmp_path: Path):
+    from tamigo_intel.terms import procurement_label
+
+    db = Database(tmp_path / "t.sqlite")
+    with db.connect() as conn:
+        _store(
+            db,
+            conn,
+            discovery(procurement_signal="past_award", published_at="2022-01-01T00:00:00Z"),
+            config(),
+        )
+        conn.commit()
+    destination = tmp_path / "out.csv"
+    export_csv(db, destination)
+    with destination.open(encoding="utf-8-sig", newline="") as handle:
+        row = next(csv.DictReader(handle))
+    assert row["procurement_signal"] == "past_award"
+    assert row["evidence_timing"] == procurement_label("past_award")
+    assert "nije otvoren poziv" in row["evidence_timing"]
+    assert "Otvorena nabavka" not in row["evidence_timing"]
+
+
+def test_reopen_keeps_database(tmp_path: Path):
+    path = tmp_path / "t.sqlite"
+    first = Database(path)
+    with first.connect() as conn:
+        _store(first, conn, discovery(), config())
+        conn.commit()
+    first.update_lead_operator(1, "reviewing", "beleška ostaje", "2026-12-01", "unverified_prospect")
+    del first
+    second = Database(path)
+    bundle = second.lead_bundle(1)
+    assert bundle["lead"]["user_notes"] == "beleška ostaje"
+    assert bundle["lead"]["status"] == "reviewing"
+    assert bundle["evidence"][0]["source_url"].startswith("https://")
+
+
+def test_data_dir_stays_in_application_support_when_frozen(tmp_path: Path, monkeypatch):
+    import tamigo_intel.paths as paths
+
+    monkeypatch.delenv("TAMIGO_INTEL_HOME", raising=False)
+    monkeypatch.setattr(paths.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(paths.sys, "platform", "darwin")
+    monkeypatch.setattr(paths.Path, "home", classmethod(lambda cls: tmp_path))
+    target = paths.data_dir()
+    assert target == tmp_path / "Library" / "Application Support" / "TamigoIntel"
+    assert target.is_dir()
+    monkeypatch.setenv("TAMIGO_INTEL_HOME", str(tmp_path / "override"))
+    assert paths.data_dir() == tmp_path / "override"
+
+
+def test_accessible_pdf_in_the_subject_is_level_a():
+    from tamigo_intel.terms import procurement_level
+
+    excerpt = "Standing Offer for Accessibility Services (Stream 1: Creation of accessible PDFs)"
+    assert procurement_level("Application of Accessibility Standards", excerpt) == "A"
+
+
+def test_cli_writes_self_check_stats_and_search_result(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("TAMIGO_INTEL_HOME", str(tmp_path))
+    from tamigo_intel.__main__ import main
+
+    main(["--self-check"])
+    payload = json.loads((tmp_path / "self-check.json").read_text(encoding="utf-8"))
+    assert payload["version"] == "0.2.0"
+    assert payload["frozen"] is False
+    assert payload["db_path"].endswith("tamigo.sqlite")
+
+    database = Database(tmp_path / "tamigo.sqlite")
+    with database.connect() as conn:
+        _store(database, conn, discovery(), config())
+        conn.commit()
+    database.update_lead_operator(1, "reviewing", "ostaje posle izlaska", "2026-12-01", "unverified_prospect")
+    main(["--stats"])
+    first = json.loads((tmp_path / "stats.json").read_text(encoding="utf-8"))
+    main(["--stats"])
+    second = json.loads((tmp_path / "stats.json").read_text(encoding="utf-8"))
+    assert first["leads"] == 1
+    assert second["leads"] == first["leads"]
+    assert second["organizations"] == 1
+
+    def fake_search(database, search_config, on_progress=None):
+        if on_progress:
+            on_progress("probni izvor")
+        return {"status": "completed", "stored": 0, "run_id": 1, "log": ["nema novih"]}
+
+    monkeypatch.setattr("tamigo_intel.pipeline.run_search", fake_search)
+    main(["--search", "--max-organizations", "2"])
+    written = json.loads((tmp_path / "search-result.json").read_text(encoding="utf-8"))
+    assert written["status"] == "completed"
+    assert written["stored"] == 0
+
+    real_stdout = sys.stdout
+    try:
+        sys.stdout = None
+        main(["--self-check"])
+    finally:
+        sys.stdout = real_stdout
+    again = json.loads((tmp_path / "self-check.json").read_text(encoding="utf-8"))
+    assert again["data_dir"] == str(tmp_path)
 
 
 def test_published_email_extractor():

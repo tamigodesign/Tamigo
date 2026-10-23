@@ -99,12 +99,22 @@ class HttpClient:
         _status, data = self.request("POST", url, payload=payload, headers=headers)
         return json.loads(data.decode("utf-8"))
 
-    def get_bytes(self, url: str, headers: dict | None = None, max_bytes: int | None = None) -> bytes:
+    def get_bytes(
+        self,
+        url: str,
+        headers: dict | None = None,
+        max_bytes: int | None = None,
+        timeout: float | None = None,
+    ) -> bytes:
         previous = self.max_bytes
+        previous_timeout = self.timeout
         if max_bytes is not None:
             self.max_bytes = max_bytes
+        if timeout is not None:
+            self.timeout = timeout
         try:
             _status, data = self.request("GET", url, headers=headers)
             return data
         finally:
             self.max_bytes = previous
+            self.timeout = previous_timeout

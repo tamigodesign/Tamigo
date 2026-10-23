@@ -77,6 +77,8 @@ PRIMARY_PROCUREMENT_PHRASES = (
     "508 accessibility",
     "508 document",
     "wcag",
+    "accessible pdf",
+    "accessible epub",
 )
 
 
@@ -143,6 +145,18 @@ def age_days(value: str | None, now: datetime | None = None) -> int | None:
         return None
     moment = now or datetime.now(timezone.utc)
     return max(0, (moment - parsed).days)
+
+
+PROCUREMENT_LABELS = {
+    "open_procurement": "Otvorena nabavka",
+    "past_award": "Istorijska dodela (nije otvoren poziv)",
+    "closed": "Zatvoren ili stariji oglas (nije otvoren poziv)",
+    "none": "Nema zapisa o nabavci",
+}
+
+
+def procurement_label(signal: str | None) -> str:
+    return PROCUREMENT_LABELS.get(signal or "none", PROCUREMENT_LABELS["none"])
 
 
 def country_code(value: str | None) -> str:
