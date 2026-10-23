@@ -1,15 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec. Pokreće se samo na macOS, iz scripts/build_macos_app.sh."""
 
+import os
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
+root = os.path.abspath(os.path.join(SPECPATH, ".."))
 pyside_datas, pyside_binaries, pyside_hidden = collect_all("PySide6")
 
 block_cipher = None
 
 a = Analysis(
-    ["launch_tamigo.py"],
-    pathex=["."],
+    [os.path.join(root, "launch_tamigo.py")],
+    pathex=[root],
     binaries=pyside_binaries,
     datas=pyside_datas,
     hiddenimports=collect_submodules("tamigo_intel") + pyside_hidden + ["pypdf"],

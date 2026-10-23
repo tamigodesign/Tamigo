@@ -20,7 +20,7 @@ jobs:
           python -m pip install -r requirements.txt "pyinstaller>=6.6"
           python -m pytest -q
       - name: Build Finder app
-        run: bash scripts/build_macos_app.sh
+        run: PYTHON="$(command -v python)" bash scripts/build_macos_app.sh
       - name: Frozen self-check and real search
         run: |
           set -euo pipefail

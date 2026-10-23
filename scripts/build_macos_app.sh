@@ -8,8 +8,9 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 cd "$(dirname "$0")/.."
-python3 -m pip install -r requirements.txt "pyinstaller>=6.6"
-python3 -m PyInstaller --noconfirm --clean packaging/tamigo.spec
+PY="${PYTHON:-python3}"
+"$PY" -m pip install -r requirements.txt "pyinstaller>=6.6"
+"$PY" -m PyInstaller --noconfirm --clean packaging/tamigo.spec
 codesign --force --deep --sign - "dist/Tamigo Accessibility Intelligence.app"
 ditto -c -k --keepParent "dist/Tamigo Accessibility Intelligence.app" "dist/Tamigo-macos.zip"
 echo "Napravljeno: dist/Tamigo Accessibility Intelligence.app"
