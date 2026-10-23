@@ -8,15 +8,17 @@ Proizvod je macOS aplikacija `Tamigo Accessibility Intelligence.app`. Za svakodn
 
 ## Kako se dobija aplikacija
 
-Na sopstvenom Macu, iz ovog repozitorijuma:
+Računar za ovaj proizvod je Intel Mac na macOS Sequoia. Paket za njega je artefakt **Tamigo-macos-intel**. Apple Silicon arhiva **Tamigo-macos-apple-silicon** postoji posebno i nije paket za taj računar.
+
+Na Intel Macu, iz ovog repozitorijuma, sa Pythonom 3.12 (instalacija sa python.org ako `python3` nije već tu):
 
 ```bash
 bash scripts/build_macos_app.sh
 ```
 
-Skripta staje sa kodom 2 ako nije macOS. Pravi `dist/Tamigo Accessibility Intelligence.app` i `dist/Tamigo-macos.zip`, pa potpisuje paket ad-hoc potpisom. Nema Apple notarizacije. Pri prvom otvaranju nepotpisane aplikacije koristi se desni klik, pa Open.
+Skripta staje sa kodom 2 ako nije macOS. Na Intelu pravi `dist/Tamigo Accessibility Intelligence.app` i `dist/Tamigo-macos-intel.zip`. Na Apple Siliconu ime arhive je `dist/Tamigo-macos-apple-silicon.zip`. Potpis je ad-hoc. Nema Apple notarizacije. Pri prvom otvaranju nepotpisane aplikacije koristi se desni klik, pa Open.
 
-Isti tok pokreće GitHub Actions na `macos-14` (`.github/workflows/macos-app.yml`) kad se grana `cursor/accessibility-intelligence-0cba` pošalje. Artefakt je `Tamigo-macos.zip`. Runner je Apple Silicon. Univerzalni binarni paket se ne pravi. Za Intel Mac skripta se pokreće na tom računaru.
+Isti tok pokreće GitHub Actions (`.github/workflows/macos-app.yml`). Intel posao ide na `macos-15-intel`. Apple Silicon posao ostaje na `macos-14`. Pre pakovanja skripta proverava da su Python i PySide6 te arhitekture, a posle pakovanja da Mach-O fajlovi u `.app` nose istu arhitekturu.
 
 Python i `python -m tamigo_intel` ostaju razvojni način. To nije način na koji se program koristi.
 
@@ -26,7 +28,7 @@ Provereno na Linuxu, 23. oktobra 2026: `python3 -m pytest -q` završava sa izlaz
 
 Provereno na GitHub macOS runneru (Apple Silicon, `macos-14`), 23. oktobra 2026. u 22:58 po beogradskom vremenu: [Actions run 40023018857](https://github.com/tamigodesign/Tamigo/actions/runs/40023018857). Zamrznuti program u `.app` je prijavio verziju 0.2.0, `frozen: true` i `platform: darwin`. Prava pretraga je sačuvala tri ustanove iz Contracts Finder: NHS England, The Arts Council of England i Derbyshire County Council. Drugo čitanje statistike videlo je iste tri. Artefakt `Tamigo-macos.zip` je otpremljen. Isti rezultat dao je i prethodni prolaz, [run 40022519347](https://github.com/tamigodesign/Tamigo/actions/runs/40022519347), u 22:55.
 
-Dvostruki klik u Finderu nije proveren. Nema notarizacije. Intel Mac nije građen. AusTender i dalje vraća 403 i nije povezan.
+Dvostruki klik u Finderu na ličnom računaru nije proveren. Nema notarizacije. Apple Silicon arhiva nije Intel paket. AusTender i dalje vraća 403 i nije povezan.
 
 ## Šta je stvarno povezano
 

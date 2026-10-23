@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import sys
 
 from tamigo_intel import __version__
@@ -35,6 +36,7 @@ def main(argv: list[str] | None = None) -> None:
             "version": __version__,
             "frozen": is_frozen(),
             "platform": sys.platform,
+            "machine": platform.machine(),
             "data_dir": str(data_dir()),
             "db_path": str(db_path()),
         }

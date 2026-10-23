@@ -527,6 +527,7 @@ def test_cli_writes_self_check_stats_and_search_result(tmp_path: Path, monkeypat
     payload = json.loads((tmp_path / "self-check.json").read_text(encoding="utf-8"))
     assert payload["version"] == "0.2.0"
     assert payload["frozen"] is False
+    assert payload["machine"]
     assert payload["db_path"].endswith("tamigo.sqlite")
 
     database = Database(tmp_path / "tamigo.sqlite")

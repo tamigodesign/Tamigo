@@ -10,8 +10,19 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            artifact: Tamigo-macos-intel
+            machine: x86_64
+          - runner: macos-14
+            artifact: Tamigo-macos-apple-silicon
+            machine: arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,15 +32,34 @@ jobs:
         run: |
           python -m pip install -r requirements.txt "pyinstaller>=6.6"
           python -m pytest -q
+          python -c "import platform; print(platform.machine(), platform.mac_ver())"
       - name: Build Finder app
         run: PYTHON="$(command -v python)" bash scripts/build_macos_app.sh
       - name: Frozen self-check and real search
+        env:
+          EXPECT_MACHINE: ${{ matrix.machine }}
         run: |
           set -euo pipefail
+          echo "uname: $(uname -m)"
+          sw_vers
+          sysctl -n machdep.cpu.brand_string || true
+          if [[ "$(uname -m)" != "$EXPECT_MACHINE" ]]; then
+            echo "Runner nije $EXPECT_MACHINE." >&2
+            exit 1
+          fi
+          if [[ "$EXPECT_MACHINE" == "x86_64" ]]; then
+            case "$(sw_vers -productVersion)" in
+              15.*) ;;
+              *)
+                echo "Intel paket se gradi na macOS 15 Sequoia. Runner javlja $(sw_vers -productVersion)." >&2
+                exit 1
+                ;;
+            esac
+          fi
           APP="dist/Tamigo Accessibility Intelligence.app"
           BIN="$APP/Contents/MacOS/Tamigo Accessibility Intelligence"
           test -x "$BIN"
-          echo "Binary: $BIN"
+          file "$BIN"
           export TAMIGO_INTEL_HOME="${RUNNER_TEMP}/tamigo-home"
           "$BIN" --self-check
           "$BIN" --search --max-organizations 3
@@ -48,6 +78,7 @@ jobs:
           assert payload["frozen"] is True, payload
           assert payload["platform"] == "darwin", payload
           assert payload["version"] == "0.2.0"
+          assert payload["machine"] == os.environ["EXPECT_MACHINE"], payload
           first = json.loads(Path(os.environ["RUNNER_TEMP"], "stats-first.json").read_text())
           second = json.loads((home / "stats.json").read_text())
           print(payload)
@@ -58,6 +89,6 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: Tamigo-macos
-          path: dist/Tamigo-macos.zip
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.zip
           if-no-files-found: error
