@@ -26,9 +26,11 @@ Python i `python -m tamigo_intel` ostaju razvojni način. To nije način na koji
 
 Provereno na Linuxu, 23. oktobra 2026: `python3 -m pytest -q` završava sa izlaznim kodom 0 (32 testa). Tu spadaju filter dokaza, oznaka istorijske dodele, čuvanje beleške posle ponovnog otvaranja baze, CanadaBuys parser, i upis `--self-check` / `--stats` i kad proces nema konzolu. Prozor je pokrenut offscreen: lid, ograda i URL izvora se vide. To nije Finder. `scripts/build_macos_app.sh` na Linuxu staje i ne pravi `.app`.
 
-Provereno na GitHub macOS runneru (Apple Silicon, `macos-14`), 23. oktobra 2026. u 22:58 po beogradskom vremenu: [Actions run 40023018857](https://github.com/tamigodesign/Tamigo/actions/runs/40023018857). Zamrznuti program u `.app` je prijavio verziju 0.2.0, `frozen: true` i `platform: darwin`. Prava pretraga je sačuvala tri ustanove iz Contracts Finder: NHS England, The Arts Council of England i Derbyshire County Council. Drugo čitanje statistike videlo je iste tri. Artefakt `Tamigo-macos.zip` je otpremljen. Isti rezultat dao je i prethodni prolaz, [run 40022519347](https://github.com/tamigodesign/Tamigo/actions/runs/40022519347), u 22:55.
+Proveren Intel paket na GitHub runneru `macos-15-intel`, 23. oktobra 2026. u 23:19 po beogradskom vremenu: [Actions run 40024868133](https://github.com/tamigodesign/Tamigo/actions/runs/40024868133), posao `Tamigo-macos-intel`. Runner javlja macOS 15.7.9 i `Intel(R) Core(TM) i7-8700B`. Python 3.12.10 je `x86_64`. Pre pakovanja provereno je 403 PySide6 Mach-O fajla. U `.app` je provereno 1138 Mach-O fajlova i svi nose `x86_64`. Glavni program je `Mach-O 64-bit executable x86_64`. Zamrznuti program je prijavio verziju 0.2.0, `frozen: true`, `platform: darwin`, `machine: x86_64`. Prava pretraga je sačuvala NHS England, The Arts Council of England i Derbyshire County Council. Drugo čitanje statistike videlo je iste tri ustanove. Artefakt je **Tamigo-macos-intel** (265.579.990 bajtova).
 
-Dvostruki klik u Finderu na ličnom računaru nije proveren. Nema notarizacije. Apple Silicon arhiva nije Intel paket. AusTender i dalje vraća 403 i nije povezan.
+To pokretanje je išlo naredbom na binarni fajl unutar `.app`, na tuđem Intel Macu u Actions. Dvostruki klik u Finderu na tvom računaru nije rađen. Nema notarizacije.
+
+Apple Silicon arhiva **Tamigo-macos-apple-silicon** iz istog prolaza nije paket za Intel Mac. Starije ime `Tamigo-macos.zip` je bilo samo za Apple Silicon i više se ne koristi. AusTender i dalje vraća 403 i nije povezan.
 
 ## Šta je stvarno povezano
 
