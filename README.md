@@ -22,9 +22,11 @@ Python i `python -m tamigo_intel` ostaju razvojni način. To nije način na koji
 
 ## Šta je provereno, a šta nije
 
-Provereno na Linuxu, 23. oktobra 2026: `python3 -m pytest -q` završava sa izlaznim kodom 0 (32 testa). Tu spadaju filter dokaza, oznaka istorijske dodele, čuvanje beleške posle ponovnog otvaranja baze, CanadaBuys parser, i upis `--self-check` / `--stats` i kad proces nema konzolu. Prozor je pokrenut offscreen: lid, ograda i URL izvora se vide. To nije Finder.
+Provereno na Linuxu, 23. oktobra 2026: `python3 -m pytest -q` završava sa izlaznim kodom 0 (32 testa). Tu spadaju filter dokaza, oznaka istorijske dodele, čuvanje beleške posle ponovnog otvaranja baze, CanadaBuys parser, i upis `--self-check` / `--stats` i kad proces nema konzolu. Prozor je pokrenut offscreen: lid, ograda i URL izvora se vide. To nije Finder. `scripts/build_macos_app.sh` na Linuxu staje i ne pravi `.app`.
 
-`scripts/build_macos_app.sh` na ovom Linuxu staje i ne pravi `.app`. Finder pokretanje nije provereno dok macOS tok u Actions ne prođe, i ni tada dvostruki klik u Finderu nije isti korak kao pokretanje zamrznutog programa iz terminala na runneru. Zamrznuti program na runneru radi `--self-check`, pravu pretragu sa najviše tri ustanove i dva čitanja `--stats`. Tek posle zelenog toka sme da se kaže da je paket startovao na tom Macu.
+Provereno na GitHub macOS runneru (Apple Silicon, `macos-14`), 23. oktobra 2026. u 22:55 po beogradskom vremenu: [Actions run 40022519347](https://github.com/tamigodesign/Tamigo/actions/runs/40022519347). Zamrznuti program u `.app` je prijavio verziju 0.2.0, `frozen: true` i `platform: darwin`. Prava pretraga je sačuvala tri ustanove iz Contracts Finder: NHS England, The Arts Council of England i Derbyshire County Council. Drugo čitanje statistike videlo je iste tri. Artefakt `Tamigo-macos.zip` je otpremljen (237.185.891 bajtova).
+
+Dvostruki klik u Finderu nije proveren. Nema notarizacije. Intel Mac nije građen. AusTender i dalje vraća 403 i nije povezan.
 
 ## Šta je stvarno povezano
 

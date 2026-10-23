@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - cursor/accessibility-intelligence-0cba
+    paths-ignore:
+      - "README.md"
 
 jobs:
   build:
