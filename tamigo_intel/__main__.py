@@ -9,6 +9,8 @@ from tamigo_intel import __version__
 from tamigo_intel.config import load_config
 from tamigo_intel.db import Database
 from tamigo_intel.paths import data_dir, db_path, is_frozen
+from tamigo_intel.redact import redact
+from tamigo_intel.vault import SECRET_FIELDS
 
 
 def _emit(message: str) -> None:
@@ -64,8 +66,12 @@ def main(argv: list[str] | None = None) -> None:
             try:
                 result = run_search(database, config, on_progress=_emit)
             except Exception as exc:
+                secret_values = [str(getattr(config, name) or "") for name in SECRET_FIELDS]
                 (data_dir() / "search-result.json").write_text(
-                    json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False),
+                    json.dumps(
+                        {"status": "error", "error": redact(str(exc), secret_values)},
+                        ensure_ascii=False,
+                    ),
                     encoding="utf-8",
                 )
                 raise

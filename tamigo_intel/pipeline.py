@@ -9,11 +9,12 @@ from tamigo_intel.analysis.epub_check import analyze_epub
 from tamigo_intel.analysis.html_check import analyze_html
 from tamigo_intel.analysis.pdf_check import analyze_pdf
 from tamigo_intel.cancel import Cancelled, CancelToken
-from tamigo_intel.config import SearchConfig
+from tamigo_intel.config import SearchConfig, validate_limits
 from tamigo_intel.contacts import contact_from_discovery
 from tamigo_intel.db import Database, utc_now
 from tamigo_intel.http_client import HttpClient, HttpError
 from tamigo_intel.qualify import score_lead
+from tamigo_intel.redact import redact
 from tamigo_intel.sources.base import Discovered
 from tamigo_intel.sources.canada_buys import CanadaBuysSource
 from tamigo_intel.sources.contracts_finder import ContractsFinderSource
@@ -21,6 +22,7 @@ from tamigo_intel.sources.github_issues import GitHubIssuesSource
 from tamigo_intel.sources.sam_gov import SamGovSource, SourceUnavailable
 from tamigo_intel.sources.ted import TedSource
 from tamigo_intel.sources.usaspending import UsaSpendingSource
+from tamigo_intel.status_text import outcome_label, overall_status
 from tamigo_intel.terms import clean_text, detect_formats, infer_category, normalize_name, relevant
 
 log = logging.getLogger("tamigo_intel")
@@ -168,15 +170,21 @@ def run_search(
         if on_progress:
             on_progress(message)
 
+    validate_limits(config)
     cancel = cancel or CancelToken()
     client = client or HttpClient(min_interval=config.request_interval_seconds, cancel=cancel, secrets=_secrets(config))
     client.cancel = cancel
     client.secrets = _secrets(config)
     run_id = db.start_run(json.dumps(config.to_public_dict(), ensure_ascii=False))
     lines: list[str] = []
+    reports: list[dict] = []
     seen_orgs: set[int] = set()
+    chosen = build_sources(config) if sources is None else list(sources)
     try:
-        for source in sources or build_sources(config):
+        if not chosen:
+            lines.append("Nijedan izvor nije uključen, pa nema uspešnog upita.")
+            progress(lines[-1])
+        for source in chosen:
             cancel.raise_if_cancelled()
             progress(f"Izvor {source.name} počinje.")
             try:
@@ -184,16 +192,20 @@ def run_search(
             except Cancelled:
                 raise
             except SourceUnavailable as exc:
-                db.set_source_state(source.name, "unavailable", str(exc))
-                lines.append(f"{source.name}: nedostupan. {exc}")
+                message = _safe(exc, config)
+                db.set_source_state(source.name, "unavailable", message, 0)
+                reports.append({"name": source.name, "status": "unavailable", "count": 0, "error": message})
+                lines.append(f"{source.name}: nedostupan. {message}")
                 progress(lines[-1])
                 continue
             except (HttpError, OSError, ValueError, KeyError) as exc:
-                db.set_source_state(source.name, "failed", str(exc))
-                lines.append(f"{source.name}: greška. {exc}")
+                message = _safe(exc, config)
+                db.set_source_state(source.name, "failed", message, 0)
+                reports.append({"name": source.name, "status": "failed", "count": 0, "error": message})
+                lines.append(f"{source.name}: greška. {message}")
                 progress(lines[-1])
                 continue
-            db.set_source_state(source.name, "ok", "")
+            stored_here = 0
             with db.connect() as conn:
                 for item in items:
                     cancel.raise_if_cancelled()
@@ -205,21 +217,43 @@ def run_search(
                     conn.commit()
                     if org_id and org_id not in seen_orgs:
                         seen_orgs.add(org_id)
+                        stored_here += 1
                         progress(f"Sačuvan trag: {item.organization_name} ({item.source_name})")
+            db.set_source_state(source.name, "ok", "", len(items))
+            reports.append(
+                {"name": source.name, "status": "ok", "count": len(items), "stored": stored_here, "error": ""}
+            )
+            lines.append(f"{source.name}: uspeo, odgovor {len(items)}, sačuvanih ustanova {stored_here}.")
+            progress(lines[-1])
             if len(seen_orgs) >= config.max_organizations:
-                lines.append("Dostignut je zadati maksimum ustanova.")
+                lines.append("Dostignut je zadati maksimum ustanova. Ostali izvori nisu pitani i nisu neuspeh.")
+                progress(lines[-1])
                 break
-        status = "completed"
+        status = overall_status(reports, len(seen_orgs))
+        summary = outcome_label(status)
+        lines.append(summary)
+        progress(summary)
         db.finish_run(run_id, status, "\n".join(lines))
-        return {"status": status, "stored": len(seen_orgs), "run_id": run_id, "log": lines}
+        return {
+            "status": status,
+            "stored": len(seen_orgs),
+            "run_id": run_id,
+            "log": lines,
+            "sources": reports,
+        }
     except Cancelled:
-        lines.append("Pretraga je zaustavljena. Sačuvani tragovi ostaju.")
+        lines.append(outcome_label("cancelled"))
         db.finish_run(run_id, "cancelled", "\n".join(lines))
-        return {"status": "cancelled", "stored": len(seen_orgs), "run_id": run_id, "log": lines}
+        return {"status": "cancelled", "stored": len(seen_orgs), "run_id": run_id, "log": lines, "sources": reports}
     except Exception as exc:
-        lines.append(str(exc))
-        db.finish_run(run_id, "error", "\n".join(lines), str(exc))
+        message = _safe(exc, config)
+        lines.append(message)
+        db.finish_run(run_id, "error", "\n".join(lines), message)
         raise
+
+
+def _safe(exc: Exception, config: SearchConfig) -> str:
+    return redact(str(exc), _secrets(config))
 
 
 def _secrets(config: SearchConfig) -> list[str]:

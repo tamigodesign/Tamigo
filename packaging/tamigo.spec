@@ -3,10 +3,11 @@
 
 import os
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 root = os.path.abspath(os.path.join(SPECPATH, ".."))
 pyside_datas, pyside_binaries, pyside_hidden = collect_all("PySide6")
+certifi_datas = collect_data_files("certifi")
 
 block_cipher = None
 
@@ -14,8 +15,8 @@ a = Analysis(
     [os.path.join(root, "launch_tamigo.py")],
     pathex=[root],
     binaries=pyside_binaries,
-    datas=pyside_datas,
-    hiddenimports=collect_submodules("tamigo_intel") + pyside_hidden + ["pypdf"],
+    datas=pyside_datas + certifi_datas,
+    hiddenimports=collect_submodules("tamigo_intel") + pyside_hidden + ["pypdf", "certifi", "keyring", "keyring.backends.macOS"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

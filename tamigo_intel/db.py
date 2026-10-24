@@ -167,7 +167,8 @@ CREATE TABLE IF NOT EXISTS source_states (
     source_name TEXT PRIMARY KEY,
     last_checked_at TEXT,
     last_status TEXT NOT NULL,
-    last_error TEXT NOT NULL DEFAULT ''
+    last_error TEXT NOT NULL DEFAULT '',
+    last_result_count INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -195,6 +196,11 @@ class Database:
         row = conn.execute("SELECT version FROM schema_migrations WHERE version = 1").fetchone()
         if row is None:
             conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)", (utc_now(),))
+        columns = {info[1] for info in conn.execute("PRAGMA table_info(source_states)")}
+        if "last_result_count" not in columns:
+            conn.execute(
+                "ALTER TABLE source_states ADD COLUMN last_result_count INTEGER NOT NULL DEFAULT 0"
+            )
         conn.commit()
 
     def backup_to(self, destination: Path) -> None:
@@ -525,20 +531,84 @@ class Database:
             )
             conn.commit()
 
-    def set_source_state(self, name: str, status: str, error: str = "") -> None:
+    def set_source_state(self, name: str, status: str, error: str = "", result_count: int = 0) -> None:
         with self.connect() as conn:
             conn.execute(
                 """
-                INSERT INTO source_states (source_name, last_checked_at, last_status, last_error)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO source_states (source_name, last_checked_at, last_status, last_error, last_result_count)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(source_name) DO UPDATE SET
                     last_checked_at = excluded.last_checked_at,
                     last_status = excluded.last_status,
-                    last_error = excluded.last_error
+                    last_error = excluded.last_error,
+                    last_result_count = excluded.last_result_count
                 """,
-                (name, utc_now(), status, error[:1000]),
+                (name, utc_now(), status, error[:1000], int(result_count)),
             )
             conn.commit()
+
+    def latest_run(self) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM search_runs ORDER BY id DESC LIMIT 1").fetchone()
+            return dict(row) if row else None
+
+    def latest_successful_run(self) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM search_runs
+                WHERE status IN ('completed_with_results', 'completed_empty', 'partial', 'completed')
+                ORDER BY id DESC LIMIT 1
+                """
+            ).fetchone()
+            return dict(row) if row else None
+
+    def delete_leads(self, lead_ids: list[int]) -> int:
+        removed = 0
+        with self.connect() as conn:
+            for lead_id in lead_ids:
+                org = conn.execute("SELECT organization_id FROM leads WHERE id = ?", (lead_id,)).fetchone()
+                if org is None:
+                    continue
+                self._delete_organization(conn, int(org["organization_id"]), int(lead_id))
+                removed += 1
+            conn.commit()
+        return removed
+
+    def delete_all_research(self) -> None:
+        with self.connect() as conn:
+            for table in (
+                "findings",
+                "procurement_notices",
+                "evidence_history",
+                "lead_events",
+                "contacts",
+                "documents",
+                "evidence",
+                "leads",
+                "organizations",
+                "search_runs",
+            ):
+                conn.execute(f"DELETE FROM {table}")
+            conn.commit()
+
+    def _delete_organization(self, conn: sqlite3.Connection, organization_id: int, lead_id: int) -> None:
+        evidence_ids = [
+            int(row["id"])
+            for row in conn.execute("SELECT id FROM evidence WHERE organization_id = ?", (organization_id,))
+        ]
+        for evidence_id in evidence_ids:
+            conn.execute("DELETE FROM evidence_history WHERE evidence_id = ?", (evidence_id,))
+            conn.execute("DELETE FROM procurement_notices WHERE evidence_id = ?", (evidence_id,))
+            conn.execute("DELETE FROM findings WHERE evidence_id = ?", (evidence_id,))
+        for row in conn.execute("SELECT id FROM documents WHERE organization_id = ?", (organization_id,)):
+            conn.execute("DELETE FROM findings WHERE document_id = ?", (int(row["id"]),))
+        conn.execute("DELETE FROM documents WHERE organization_id = ?", (organization_id,))
+        conn.execute("DELETE FROM contacts WHERE organization_id = ?", (organization_id,))
+        conn.execute("DELETE FROM lead_events WHERE lead_id = ?", (lead_id,))
+        conn.execute("DELETE FROM evidence WHERE organization_id = ?", (organization_id,))
+        conn.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
+        conn.execute("DELETE FROM organizations WHERE id = ?", (organization_id,))
 
     def dashboard(self) -> dict:
         with self.connect() as conn:

@@ -24,11 +24,11 @@ Python i `python -m tamigo_intel` ostaju razvojni način. To nije način na koji
 
 ## Šta je provereno, a šta nije
 
-Provereno na Linuxu, 23. oktobra 2026: `python3 -m pytest -q` završava sa izlaznim kodom 0 (32 testa). Tu spadaju filter dokaza, oznaka istorijske dodele, čuvanje beleške posle ponovnog otvaranja baze, CanadaBuys parser, i upis `--self-check` / `--stats` i kad proces nema konzolu. Prozor je pokrenut offscreen: lid, ograda i URL izvora se vide. To nije Finder. `scripts/build_macos_app.sh` na Linuxu staje i ne pravi `.app`.
+Provereno na Linuxu, 24. oktobra 2026. oko 03:26 po beogradskom vremenu: `python3 -m pytest -q` završava sa izlaznim kodom 0 (44 testa, 44 tačke). Tu spadaju podrazumevani period od 90 dana, osvežavanje koje čuva belešku i dodaje novu ustanovu, čišćenje prikaza bez brisanja baze, potvrda pre brisanja, izostanak API ključa iz config.json, dnevnika i izvoza, neuspeh kad nijedan izvor ne odgovori, delimičan ishod, istorija dokaza posle ponovnog otvaranja baze, CanadaBuys parser i upis `--self-check` / `--stats` i kad proces nema konzolu. Prozor je pokrenut offscreen. To nije Finder. `scripts/build_macos_app.sh` na Linuxu staje i ne pravi `.app`.
 
 Proveren Intel paket na GitHub runneru `macos-15-intel`, 23. oktobra 2026. u 23:19 po beogradskom vremenu: [Actions run 40024868133](https://github.com/tamigodesign/Tamigo/actions/runs/40024868133), posao `Tamigo-macos-intel`. Runner javlja macOS 15.7.9 i `Intel(R) Core(TM) i7-8700B`. Python 3.12.10 je `x86_64`. Pre pakovanja provereno je 403 PySide6 Mach-O fajla. U `.app` je provereno 1138 Mach-O fajlova i svi nose `x86_64`. Glavni program je `Mach-O 64-bit executable x86_64`. Zamrznuti program je prijavio verziju 0.2.0, `frozen: true`, `platform: darwin`, `machine: x86_64`. Prava pretraga je sačuvala NHS England, The Arts Council of England i Derbyshire County Council. Drugo čitanje statistike videlo je iste tri ustanove. Artefakt je **Tamigo-macos-intel** (265.579.990 bajtova).
 
-To pokretanje je išlo naredbom na binarni fajl unutar `.app`, na tuđem Intel Macu u Actions. Dvostruki klik u Finderu na tvom računaru nije rađen. Nema notarizacije.
+To pokretanje je išlo naredbom na binarni fajl unutar `.app`, na tuđem Intel Macu u Actions. Dvostruki klik u Finderu na tvom računaru nije rađen. Nema notarizacije. Taj artefakt je stariji od ispravke perioda od 90 dana, ishoda pretrage, Keychain-a i TLS paketa `certifi`. Novi Intel paket nastaje tek kad `macos-15-intel` ponovo završi zelen.
 
 Apple Silicon arhiva **Tamigo-macos-apple-silicon** iz istog prolaza nije paket za Intel Mac. Starije ime `Tamigo-macos.zip` je bilo samo za Apple Silicon i više se ne koristi. AusTender i dalje vraća 403 i nije povezan.
 
@@ -73,6 +73,18 @@ python -m tamigo_intel --export json --qualified-only --output lidovi.json
 python -m tamigo_intel --export csv --output lidovi.csv
 ```
 
+## Period, osvežavanje i brisanje
+
+Podrazumevani period unazad je **90 dana**. Polje prima ceo broj od **1** do **7300**. Duži broj i dalje uključuje starije oglase. Kraći period ostavlja već sačuvane zapise u bazi. Ako je u `config.json` ostao stari podrazumevani period od 1825 dana, program ga jednom prebacuje na 90. Posle toga izabrani broj, uključujući 1825 ili 1845, ostaje.
+
+**Pokreni pretragu** i **Osveži / ponovi pretragu** pitaju uključene izvore i spajaju nalaze sa postojećim zapisima. Beleške, dokazi, ustanove i istorija pretrage ostaju. **Zaustavi pretragu** prekida tekući prolaz. **Ažuriraj brojače** samo ponovo čita brojeve i ne pokreće izvore.
+
+**Očisti trenutni prikaz** skida redove sa ekrana. Baza ostaje. **Obriši izabrane zapise** i **Obriši sve lokalne istraživačke podatke** traže potvrdu, podrazumevani odgovor je Ne, i pre brisanja prave `backups/pre-brisanja-….sqlite`. Brisanje svega ostavlja sačuvane pretrage, podešavanja i ključeve.
+
+Iznad kartica piše vreme poslednjeg prolaza u kome je bar jedan izvor odgovorio i ishod poslednjeg pokretanja. Ishodi su: završeno sa sačuvanim tragovima, uspešno bez sačuvanih tragova, delimično, neuspeh, zaustavljeno, greška. Tabela na kartici Pretraga pokazuje ishod, broj odgovora i detalj po izvoru. Prolaz u kome nijedan uključeni izvor nije odgovorio označen je kao neuspeh.
+
+Provera TLS sertifikata ostaje uključena. Spakovani program koristi paket sertifikata iz `certifi`.
+
 ## Kako se radi sa lidom
 
 1. U **Pretraga** ostavite izvore koji vam trebaju i pokrenite. Zaustavljanje čuva već upisane redove.
@@ -87,7 +99,11 @@ Pravni linkovi u detalju su podsetnik za proveru. Ne ulaze u bodove i ne tvrde d
 
 ## Podešavanja
 
-Prioritet podrazumevano: SAD, Kanada, UK, Australija. Niži prioritet, ne zabrana: Srbija i susedi. To se menja u **Podešavanja**. Isključene ustanove se ne upisuju. SAM.gov ključ i GitHub token ostaju samo u lokalnom `config.json`. U dnevniku se prekrivaju.
+Prioritet podrazumevano: SAD, Kanada, UK, Australija. Niži prioritet, ne zabrana: Srbija i susedi. To se menja u **Podešavanja i API ključevi**. Isključene ustanove se ne upisuju.
+
+Za svaki izvor piše da li je ključ obavezan, opcion ili nepotreban, da li je sačuvan, zvanična adresa za dobijanje pristupa i poznato ograničenje. SAM.gov traži ključ sa [api.data.gov/signup](https://api.data.gov/signup/). Dokumentacija je na [open.gsa.gov](https://open.gsa.gov/api/get-opportunities-public-api/). GitHub token je opcion i pravi se na [github.com/settings/tokens](https://github.com/settings/tokens). Lozinka naloga se ne traži. **Proveri vezu** šalje kratak zahtev i ostavlja poslednji ishod.
+
+Na macOS ključ ide u Keychain, servis `Tamigo Accessibility Intelligence`. `config.json` dobija prazno polje. Prazno polje pri čuvanju ostavlja sačuvani ključ. **Ukloni sačuvani ključ** ga skida posle potvrde. Ključ se ne upisuje u dnevnik ni u izvoz lidova.
 
 Rezervna kopija baze pravi se dugmetom u podešavanjima (`backups/tamigo-backup.sqlite`).
 

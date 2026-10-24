@@ -329,7 +329,7 @@ def test_source_failure_does_not_wipe_database(tmp_path: Path):
             return [discovery()]
 
     result = run_search(db, config(), sources=[Broken(), Good()], client=HttpClient(min_interval=0))
-    assert result["status"] == "completed"
+    assert result["status"] == "partial"
     assert result["stored"] == 1
     states = {row["source_name"]: row["last_status"] for row in db.dashboard()["sources"]}
     assert states["broken"] == "failed"

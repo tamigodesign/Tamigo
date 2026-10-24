@@ -7,6 +7,7 @@ from tamigo_intel.config import SearchConfig
 from tamigo_intel.db import Database
 from tamigo_intel.http_client import HttpClient
 from tamigo_intel.pipeline import run_search
+from tamigo_intel.redact import redact
 
 
 class SearchThread(QThread):
@@ -24,10 +25,15 @@ class SearchThread(QThread):
 
     def run(self) -> None:
         db = Database(self.db_path)
+        secrets = [
+            value
+            for value in (self.config.sam_api_key, self.config.github_token, self.config.openai_api_key)
+            if value
+        ]
         client = HttpClient(
             min_interval=self.config.request_interval_seconds,
             cancel=self.cancel_token,
-            secrets=[value for value in (self.config.sam_api_key, self.config.github_token) if value],
+            secrets=secrets,
         )
         try:
             result = run_search(
@@ -38,5 +44,6 @@ class SearchThread(QThread):
                 on_progress=self.progress.emit,
             )
         except Exception as exc:
-            result = {"status": "error", "stored": 0, "log": [str(exc)], "error": str(exc)}
+            message = redact(str(exc), secrets)
+            result = {"status": "error", "stored": 0, "log": [message], "error": message, "sources": []}
         self.finished_ok.emit(result)

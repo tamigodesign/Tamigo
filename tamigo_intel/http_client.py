@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -8,6 +9,9 @@ from typing import Callable
 
 from tamigo_intel.cancel import CancelToken
 from tamigo_intel.redact import redact
+from tamigo_intel.tls import install_ca_bundle, verified_context
+
+install_ca_bundle()
 
 USER_AGENT = "TamigoAccessibilityIntelligence/0.1 (local research; public-source prospecting)"
 Transport = Callable[..., tuple[int, bytes, dict]]
@@ -21,8 +25,11 @@ class HttpError(Exception):
 
 def _default_transport(method: str, url: str, body: bytes | None, headers: dict, timeout: float) -> tuple[int, bytes, dict]:
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
+    context = verified_context()
+    if context.verify_mode != ssl.CERT_REQUIRED or not context.check_hostname:
+        raise HttpError("TLS provera sertifikata je isključena. Zahtev nije poslat.")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
             return response.status, response.read(), dict(response.headers.items())
     except urllib.error.HTTPError as exc:
         payload = exc.read()
