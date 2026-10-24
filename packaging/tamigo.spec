@@ -1,0 +1,61 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller spec. Pokreće se samo na macOS, iz scripts/build_macos_app.sh."""
+
+import os
+
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
+
+root = os.path.abspath(os.path.join(SPECPATH, ".."))
+pyside_datas, pyside_binaries, pyside_hidden = collect_all("PySide6")
+certifi_datas = collect_data_files("certifi")
+
+block_cipher = None
+
+a = Analysis(
+    [os.path.join(root, "launch_tamigo.py")],
+    pathex=[root],
+    binaries=pyside_binaries,
+    datas=pyside_datas + certifi_datas,
+    hiddenimports=collect_submodules("tamigo_intel") + pyside_hidden + ["pypdf", "certifi", "keyring", "keyring.backends.macOS"],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    cipher=block_cipher,
+    noarchive=False,
+)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="Tamigo Accessibility Intelligence",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    argv_emulation=False,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name="Tamigo Accessibility Intelligence",
+)
+app = BUNDLE(
+    coll,
+    name="Tamigo Accessibility Intelligence.app",
+    bundle_identifier="pro.tamigo.accessibility-intelligence",
+    info_plist={
+        "CFBundleName": "Tamigo Accessibility Intelligence",
+        "CFBundleDisplayName": "Tamigo Accessibility Intelligence",
+        "CFBundleShortVersionString": "0.2.0",
+        "CFBundleVersion": "0.2.0",
+        "NSHighResolutionCapable": True,
+        "LSMinimumSystemVersion": "12.0",
+    },
+)
