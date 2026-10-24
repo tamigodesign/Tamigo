@@ -20,6 +20,7 @@ from tamigo_intel.languages import first_matching_term, language_of_term, query_
 from tamigo_intel.qualify import score_lead
 from tamigo_intel.redact import redact
 from tamigo_intel.sources.base import Discovered
+from tamigo_intel.sources.boamp import BoampSource
 from tamigo_intel.sources.canada_buys import CanadaBuysSource
 from tamigo_intel.sources.contracts_finder import ContractsFinderSource
 from tamigo_intel.sources.find_tender import FindTenderSource
@@ -40,6 +41,7 @@ SOURCE_TYPES = {
     "ted": TedSource,
     "github_issues": GitHubIssuesSource,
     "sam_gov": SamGovSource,
+    "boamp": BoampSource,
 }
 
 
@@ -50,6 +52,16 @@ def build_sources(config: SearchConfig) -> list:
         if factory:
             sources.append(factory())
     return sources
+
+
+def _outside_country_filter(source, config: SearchConfig) -> bool:
+    covered = getattr(source, "countries", None)
+    if not covered or not config.restrict_countries:
+        return False
+    chosen = {(code or "").upper() for code in config.selected_countries if code}
+    if not chosen:
+        return False
+    return not chosen.intersection({str(code).upper() for code in covered})
 
 
 def _excluded(item: Discovered, config: SearchConfig) -> bool:
@@ -199,6 +211,15 @@ def run_search(
             progress(lines[-1])
         for source in chosen:
             cancel.raise_if_cancelled()
+            if _outside_country_filter(source, run_config):
+                message = "Nije pitan: filter zemlje ne uključuje zemlje ovog izvora."
+                db.set_source_state(source.name, "skipped", message, 0)
+                reports.append(
+                    {"name": source.name, "status": "skipped", "count": 0, "error": message, "error_kind": ""}
+                )
+                lines.append(f"{source.name}: {message}")
+                progress(lines[-1])
+                continue
             progress(f"Izvor {source.name} počinje.")
             try:
                 items = source.search(run_config, client)

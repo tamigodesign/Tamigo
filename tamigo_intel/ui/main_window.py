@@ -59,7 +59,15 @@ from tamigo_intel.maintenance import DELETE_ALL_TEXT, DELETE_SELECTED_TEXT, Dele
 from tamigo_intel.paths import backup_dir, db_path
 from tamigo_intel.pipeline import analyze_path
 from tamigo_intel.redact import redact
-from tamigo_intel.sources.catalog import SOURCE_CATALOG, auth_label, catalog_by_name, test_connection
+from tamigo_intel.sources.catalog import (
+    PLANNED_SOURCES,
+    SOURCE_CATALOG,
+    SOURCE_GROUPS,
+    auth_label,
+    availability_label,
+    catalog_by_name,
+    test_connection,
+)
 from tamigo_intel.status_text import outcome_label
 from tamigo_intel.terms import PROCUREMENT_LABELS, procurement_label
 from tamigo_intel.ui.worker import SearchThread
@@ -224,10 +232,45 @@ class MainWindow(QMainWindow):
 
     def _build_search(self) -> QWidget:
         page = QWidget()
-        layout = QVBoxLayout(page)
+        outer = QVBoxLayout(page)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(280)
+        controls = QWidget()
+        layout = QVBoxLayout(controls)
+        layout.addWidget(self._build_countries())
+        layout.addWidget(self._build_sources())
+        layout.addLayout(self._search_form())
+        layout.addWidget(self._build_languages())
+        layout.addLayout(self._saved_search_row())
+        layout.addStretch(1)
+        scroll.setWidget(controls)
+        self.search_scroll = scroll
+        self.search_controls = controls
+        results = QWidget()
+        results_layout = QVBoxLayout(results)
+        self.source_table = QTableWidget(0, 4)
+        self.source_table.setHorizontalHeaderLabels(["Izvor", "Ishod", "Odgovor", "Detalj"])
+        self.source_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.source_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.search_log = QPlainTextEdit()
+        self.search_log.setReadOnly(True)
+        self.search_log.setPlaceholderText("Ishod pretrage i greška po izvoru pojavljuju se ovde.")
+        results_layout.addWidget(self.source_table)
+        results_layout.addWidget(self.search_log)
+        splitter.addWidget(scroll)
+        splitter.addWidget(results)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([480, 260])
+        outer.addWidget(splitter)
+        return page
+
+    def _search_form(self) -> QFormLayout:
         form = QFormLayout()
         self.keywords = QPlainTextEdit("\n".join(self.config.keywords))
-        self.keywords.setFixedHeight(110)
+        self.keywords.setFixedHeight(90)
         self.keywords.setToolTip("Jedna ključna reč po redu. Generička reč accessibility sama ne pravi lid.")
         self.max_orgs = QSpinBox()
         self.max_orgs.setRange(MAX_ORGS_MIN, MAX_ORGS_MAX)
@@ -259,27 +302,9 @@ class MainWindow(QMainWindow):
         form.addRow(f"Period unazad, dani ({RECENCY_MIN}–{RECENCY_MAX})", self.recency)
         form.addRow("", self.recency_hint)
         form.addRow(f"Pauza između zahteva, sekunde ({INTERVAL_MIN}–{INTERVAL_MAX})", self.interval)
-        layout.addLayout(form)
-        self.source_boxes: dict[str, QCheckBox] = {}
-        source_grid = QGridLayout()
-        for index, (name, title) in enumerate(
-            (
-                ("contracts_finder", "Contracts Finder (UK)"),
-                ("usaspending", "USAspending (SAD)"),
-                ("canada_buys", "CanadaBuys (Kanada)"),
-                ("ted", "TED (EU)"),
-                ("github_issues", "GitHub issues"),
-                ("sam_gov", "SAM.gov (traži ključ)"),
-                ("find_tender", "Find a Tender (UK, podrazumevano isključen)"),
-            )
-        ):
-            box = QCheckBox(title)
-            box.setChecked(name in self.config.enabled_sources)
-            self.source_boxes[name] = box
-            source_grid.addWidget(box, index // 3, index % 3)
-        layout.addLayout(source_grid)
-        layout.addWidget(self._build_countries())
-        layout.addWidget(self._build_languages())
+        return form
+
+    def _saved_search_row(self) -> QHBoxLayout:
         buttons = QHBoxLayout()
         self.saved_name = QLineEdit()
         self.saved_name.setPlaceholderText("Ime sačuvane pretrage")
@@ -293,24 +318,66 @@ class MainWindow(QMainWindow):
         buttons.addWidget(save_search)
         buttons.addWidget(self.saved_searches)
         buttons.addWidget(load_search)
-        layout.addLayout(buttons)
-        self.source_table = QTableWidget(0, 4)
-        self.source_table.setHorizontalHeaderLabels(["Izvor", "Ishod", "Odgovor", "Detalj"])
-        self.source_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.source_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        layout.addWidget(self.source_table)
-        self.search_log = QPlainTextEdit()
-        self.search_log.setReadOnly(True)
-        self.search_log.setPlaceholderText("Ishod pretrage i greška po izvoru pojavljuju se ovde.")
-        layout.addWidget(self.search_log)
-        return page
+        return buttons
+
+    def _build_sources(self) -> QWidget:
+        box = QGroupBox("Izvori")
+        layout = QVBoxLayout(box)
+        note = QLabel(
+            "Zemlje i izvori biraju se odvojeno. Kućica koja je siva nije pretraga. "
+            "Delimično povezan izvor ne pokriva celu zemlju."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        self.source_boxes = {}
+        self.planned_boxes = {}
+        by_group: dict[str, list] = {key: [] for key, _title in SOURCE_GROUPS}
+        for info in SOURCE_CATALOG:
+            by_group.setdefault(info.get("group") or "procurement", []).append(("live", info))
+        for info in PLANNED_SOURCES:
+            by_group.setdefault(info.get("group") or "procurement", []).append(("planned", info))
+        for key, title in SOURCE_GROUPS:
+            entries = by_group.get(key) or []
+            if not entries:
+                continue
+            group = QGroupBox(title)
+            group_layout = QVBoxLayout(group)
+            live_names = [info["name"] for kind, info in entries if kind == "live"]
+            if live_names:
+                actions = QHBoxLayout()
+                enable = QPushButton("Uključi raspoložive")
+                disable = QPushButton("Isključi raspoložive")
+                enable.clicked.connect(partial(self._set_source_group, live_names, True))
+                disable.clicked.connect(partial(self._set_source_group, live_names, False))
+                actions.addWidget(enable)
+                actions.addWidget(disable)
+                actions.addStretch(1)
+                group_layout.addLayout(actions)
+            for kind, info in entries:
+                if kind == "live":
+                    status = availability_label(info.get("availability") or "available")
+                    choice = QCheckBox(f"{info['title']} — {status}")
+                    choice.setChecked(info["name"] in self.config.enabled_sources)
+                    choice.setToolTip(info.get("limits") or "")
+                    self.source_boxes[info["name"]] = choice
+                    group_layout.addWidget(choice)
+                else:
+                    choice = QCheckBox(f"{info['title']} — nije još ugrađeno")
+                    choice.setEnabled(False)
+                    choice.setChecked(False)
+                    choice.setToolTip(info.get("note") or "Nije još ugrađeno.")
+                    self.planned_boxes[info["name"]] = choice
+                    group_layout.addWidget(choice)
+            layout.addWidget(group)
+        return box
 
     def _build_countries(self) -> QWidget:
         box = QGroupBox("Zemlje")
         layout = QVBoxLayout(box)
+        self.country_box = box
         note = QLabel(
-            "Zemlja i izvor biraju se odvojeno. Jedan izvor ne znači da je zemlja pokrivena cela. "
-            "Filter je podrazumevano isključen, pa postojeća pretraga i dalje čuva sve zemlje koje izvor vrati. "
+            "Ovo je filter pretrage, ne bodovanje. Prioritetne zemlje i isključene ustanove su u Podešavanjima "
+            "i ne sužavaju pretragu dok filter ovde nije uključen. Jedan izvor ne znači da je zemlja pokrivena cela. "
             "Uključivanje filtera ne briše sačuvane zapise."
         )
         note.setWordWrap(True)
@@ -319,14 +386,20 @@ class MainWindow(QMainWindow):
         self.country_search.setPlaceholderText("Traži zemlju")
         self.country_search.textChanged.connect(self._filter_country_list)
         layout.addWidget(self.country_search)
-        presets = QHBoxLayout()
-        for key, title in PRESETS.items():
+        presets = QGridLayout()
+        select_all = QPushButton("Izaberi sve")
+        select_all.clicked.connect(self.select_all_countries)
+        clear_all = QPushButton("Poništi izbor")
+        clear_all.clicked.connect(self.clear_country_selection)
+        presets.addWidget(select_all, 0, 0)
+        presets.addWidget(clear_all, 0, 1)
+        for index, (key, title) in enumerate(PRESETS.items()):
             button = QPushButton(title)
             button.clicked.connect(partial(self.apply_country_preset, key))
-            presets.addWidget(button)
+            presets.addWidget(button, 1 + index // 3, index % 3)
         layout.addLayout(presets)
         self.country_list = QListWidget()
-        self.country_list.setMaximumHeight(160)
+        self.country_list.setMaximumHeight(140)
         selected = {code.upper() for code in self.config.selected_countries}
         for country in COUNTRIES:
             item = QListWidgetItem(f"{country['name']} ({country['code']}) — {country['coverage']}")
@@ -365,15 +438,15 @@ class MainWindow(QMainWindow):
             "Isključeno: šalju se samo reči iz polja iznad. Uključeno: dodaju se fraze iz rečnika, najviše 16 ukupno."
         )
         layout.addWidget(self.multilingual)
-        row = QHBoxLayout()
+        grid = QGridLayout()
         self.language_boxes: dict[str, QCheckBox] = {}
         selected = {code for code in self.config.search_languages}
-        for code, name in LANGUAGE_NAMES.items():
+        for index, (code, name) in enumerate(LANGUAGE_NAMES.items()):
             choice = QCheckBox(name)
             choice.setChecked(code in selected)
             self.language_boxes[code] = choice
-            row.addWidget(choice)
-        layout.addLayout(row)
+            grid.addWidget(choice, index // 3, index % 3)
+        layout.addLayout(grid)
         return box
 
     def _filter_country_list(self, text: str) -> None:
@@ -403,13 +476,31 @@ class MainWindow(QMainWindow):
     def apply_country_preset(self, name: str, _checked: bool = False) -> None:
         self._set_country_checks(preset_codes(name))
 
+    def select_all_countries(self) -> None:
+        self.apply_country_preset("all")
+
+    def clear_country_selection(self) -> None:
+        self.apply_country_preset("none")
+
+    def _set_source_group(self, names: list[str], checked: bool) -> None:
+        for name in names:
+            box = self.source_boxes.get(name)
+            if box is not None and box.isEnabled():
+                box.setChecked(checked)
+
     def _refresh_country_summary(self) -> None:
         codes = self._selected_country_codes()
         shown = ", ".join(codes) if codes else "nijedna"
         if self.restrict_countries.isChecked():
-            text = f"Filter je uključen. Novi zapisi: {shown}. Stari zapisi ostaju."
+            text = (
+                f"Filter zemlje je UKLJUČEN. Novi zapisi ulaze samo za: {shown}. "
+                "Nepoznata zemlja se ne računa kao pogodak. Stari zapisi ostaju."
+            )
         else:
-            text = f"Filter zemlje je isključen. Izvori vraćaju svoje zemlje. Zapamćen izbor: {shown}."
+            text = (
+                "Filter zemlje je ISKLJUČEN. Pretraga nije sužena na izabrane zemlje. "
+                f"Zapamćen izbor, koji još ne filtrira: {shown}."
+            )
         self.country_summary.setText(text)
 
     def _build_leads(self) -> QWidget:
@@ -518,7 +609,11 @@ class MainWindow(QMainWindow):
                 "Na macOS ključevi idu u Keychain. Van macOS-a ostaju samo u memoriji ovog procesa "
                 "i ne upisuju se u config.json, dnevnik ni izvoz."
             )
-        intro = QLabel(store_note + " Lozinka naloga se ne traži. Prazno polje ne briše sačuvani ključ.")
+        intro = QLabel(
+            store_note
+            + " Lozinka naloga se ne traži. Prazno polje ne briše sačuvani ključ. "
+            + "Prioritetne zemlje ovde menjaju bodovanje. Izbor zemlje za pretragu je na kartici Pretraga."
+        )
         intro.setWordWrap(True)
         layout.addWidget(intro)
         for info in SOURCE_CATALOG:

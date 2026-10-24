@@ -21,6 +21,7 @@ PAGE_LIMIT = 25
 
 class FindTenderSource:
     name = "find_tender"
+    countries = ("GB",)
 
     def search(self, config: SearchConfig, client: HttpClient, now: datetime | None = None) -> list[Discovered]:
         moment = now or datetime.now(timezone.utc)

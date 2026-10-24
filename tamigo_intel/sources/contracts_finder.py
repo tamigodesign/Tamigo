@@ -12,6 +12,7 @@ ENDPOINT = "https://www.contractsfinder.service.gov.uk/api/rest/2/search_notices
 
 class ContractsFinderSource:
     name = "contracts_finder"
+    countries = ("GB",)
 
     def search(self, config: SearchConfig, client: HttpClient) -> list[Discovered]:
         found: list[Discovered] = []

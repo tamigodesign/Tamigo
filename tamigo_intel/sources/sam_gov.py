@@ -15,6 +15,7 @@ class SourceUnavailable(Exception):
 
 class SamGovSource:
     name = "sam_gov"
+    countries = ("US",)
 
     def search(self, config: SearchConfig, client: HttpClient) -> list[Discovered]:
         if not config.sam_api_key:

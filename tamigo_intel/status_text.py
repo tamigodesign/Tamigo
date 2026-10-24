@@ -21,10 +21,13 @@ def outcome_label(status: str) -> str:
 def overall_status(reports: list[dict], stored: int) -> str:
     if not reports:
         return "failed"
-    ok = [item for item in reports if item.get("status") == "ok"]
-    failed = [item for item in reports if item.get("status") != "ok"]
+    considered = [item for item in reports if item.get("status") != "skipped"]
+    if not considered:
+        return "completed_empty"
+    ok = [item for item in considered if item.get("status") == "ok"]
+    failed = [item for item in considered if item.get("status") != "ok"]
     if not ok:
-        if all(item.get("status") == "unavailable" for item in reports):
+        if all(item.get("status") == "unavailable" for item in considered):
             return "needs_configuration"
         return "failed"
     if failed:

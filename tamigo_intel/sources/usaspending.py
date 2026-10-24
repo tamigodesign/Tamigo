@@ -12,6 +12,7 @@ ENDPOINT = "https://api.usaspending.gov/api/v2/search/spending_by_award/"
 
 class UsaSpendingSource:
     name = "usaspending"
+    countries = ("US",)
 
     def search(self, config: SearchConfig, client: HttpClient) -> list[Discovered]:
         found: list[Discovered] = []

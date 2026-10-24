@@ -48,7 +48,7 @@ COUNTRIES = [
     {"code": "GB", "name": "Ujedinjeno Kraljevstvo", "groups": ["europe", "english"], "coverage": "Contracts Finder. Find a Tender je poseban izvor i podrazumevano je isključen. Nije potpuna pokrivenost."},
     {"code": "DE", "name": "Nemačka", "groups": ["eu", "europe"], "coverage": _TED + " bund.de nije povezan."},
     {"code": "NL", "name": "Holandija", "groups": ["eu", "europe"], "coverage": _TED + " TenderNed nije povezan."},
-    {"code": "FR", "name": "Francuska", "groups": ["eu", "europe"], "coverage": _TED + " BOAMP nije povezan."},
+    {"code": "FR", "name": "Francuska", "groups": ["eu", "europe"], "coverage": _TED + " BOAMP je poseban izvor, podrazumevano isključen, i gleda predmet oglasa, ne ceo tekst. Nije potpuna pokrivenost."},
     {"code": "IT", "name": "Italija", "groups": ["eu", "europe"], "coverage": _TED + " ANAC nije povezan."},
     {"code": "AT", "name": "Austrija", "groups": ["eu", "europe"], "coverage": _TED + " ANKÖ nije povezan."},
     {"code": "DK", "name": "Danska", "groups": ["eu", "europe"], "coverage": _TED + " udbud.dk nije povezan."},

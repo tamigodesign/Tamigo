@@ -24,6 +24,9 @@ STRONG_TERMS = (
     "web accessibility",
     "accessible epub",
     "epub accessibility 1.1",
+    "rgaa",
+    "accessibilité numérique",
+    "accessibilite numerique",
 )
 
 GENERIC_KEYWORDS = {
@@ -79,6 +82,9 @@ PRIMARY_PROCUREMENT_PHRASES = (
     "wcag",
     "accessible pdf",
     "accessible epub",
+    "rgaa",
+    "accessibilité numérique",
+    "accessibilite numerique",
 )
 
 

@@ -95,6 +95,9 @@ CONCEPTS = {
         "es": "accesibilidad digital",
         "sl": "digitalna dostopnost",
     },
+    "rgaa": {
+        "fr": "RGAA",
+    },
     "statement": {
         "en": "accessibility statement",
         "de": "Erklärung zur Barrierefreiheit",

@@ -198,6 +198,7 @@ def parse_canada_csv(text: str, kind: str, config: SearchConfig, file_url: str, 
 
 class CanadaBuysSource:
     name = "canada_buys"
+    countries = ("CA",)
 
     def search(self, config: SearchConfig, client: HttpClient, now: datetime | None = None) -> list[Discovered]:
         moment = now or datetime.now(timezone.utc)
