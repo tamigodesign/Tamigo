@@ -162,6 +162,8 @@ def procurement_label(signal: str | None) -> str:
 def country_code(value: str | None) -> str:
     if not value:
         return ""
+    from tamigo_intel.countries import ISO3_TO_ISO2
+
     text = value.strip()
     mapping = {
         "united states": "US",
@@ -186,6 +188,8 @@ def country_code(value: str | None) -> str:
         "ireland": "IE",
     }
     key = text.lower()
+    if key in ISO3_TO_ISO2:
+        return ISO3_TO_ISO2[key]
     if key in mapping:
         return mapping[key]
     if len(text) == 2:

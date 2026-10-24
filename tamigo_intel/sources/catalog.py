@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tamigo_intel.config import SearchConfig
+from tamigo_intel.failures import failure_kind, failure_label
 from tamigo_intel.http_client import HttpClient, HttpError
 from tamigo_intel.redact import redact
 
@@ -63,6 +64,17 @@ SOURCE_CATALOG = [
         "limits": "Besplatno. Preuzimaju se otvoreni oglasi i najviše dve poslednje fiskalne godine dodela.",
     },
     {
+        "name": "find_tender",
+        "title": "Find a Tender (UK)",
+        "auth": "none",
+        "credential": "",
+        "credential_label": "",
+        "signup_url": "https://www.find-tender.service.gov.uk/",
+        "docs_url": "https://www.find-tender.service.gov.uk/apidocumentation",
+        "instructions": "Javni OCDS API. Ključ nije potreban. Izvor je podrazumevano isključen.",
+        "limits": "Besplatno. Čitaju se najnovija izdanja, najviše četiri stranice, pa lokalni filter. Nije cela arhiva. HTML oglasa može vratiti HTTP 403.",
+    },
+    {
         "name": "ted",
         "title": "TED",
         "auth": "none",
@@ -113,6 +125,8 @@ def test_connection(name: str, config: SearchConfig, client: HttpClient) -> tupl
                 "https://api.ted.europa.eu/v3/notices/search",
                 {"query": "notice-title ~ WCAG", "fields": ["publication-number"], "limit": 1, "page": 1},
             )
+        elif name == "find_tender":
+            client.get_json("https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages?limit=1")
         elif name == "canada_buys":
             client.get_bytes(
                 "https://canadabuys.canada.ca/opendata/pub/openTenderNotice-ouvertAvisAppelOffres.csv",
@@ -154,7 +168,4 @@ def _probe_github(config: SearchConfig, client: HttpClient) -> None:
 
 
 def _safe_error(exc: Exception, secrets: list[str]) -> str:
-    text = redact(str(exc), secrets)
-    if "CERTIFICATE_VERIFY_FAILED" in text or "certificate verify failed" in text.lower():
-        return "TLS provera sertifikata nije prošla i nije isključena. " + text
-    return text
+    return f"{failure_label(failure_kind(exc))} {redact(str(exc), secrets)}"

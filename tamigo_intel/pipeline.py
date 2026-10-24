@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from tamigo_intel.analysis.common import AnalysisResult
@@ -10,14 +11,18 @@ from tamigo_intel.analysis.html_check import analyze_html
 from tamigo_intel.analysis.pdf_check import analyze_pdf
 from tamigo_intel.cancel import Cancelled, CancelToken
 from tamigo_intel.config import SearchConfig, validate_limits
+from tamigo_intel.countries import country_allowed
+from tamigo_intel.failures import failure_kind, failure_label
 from tamigo_intel.contacts import contact_from_discovery
 from tamigo_intel.db import Database, utc_now
 from tamigo_intel.http_client import HttpClient, HttpError
+from tamigo_intel.languages import first_matching_term, language_of_term, query_keywords
 from tamigo_intel.qualify import score_lead
 from tamigo_intel.redact import redact
 from tamigo_intel.sources.base import Discovered
 from tamigo_intel.sources.canada_buys import CanadaBuysSource
 from tamigo_intel.sources.contracts_finder import ContractsFinderSource
+from tamigo_intel.sources.find_tender import FindTenderSource
 from tamigo_intel.sources.github_issues import GitHubIssuesSource
 from tamigo_intel.sources.sam_gov import SamGovSource, SourceUnavailable
 from tamigo_intel.sources.ted import TedSource
@@ -29,6 +34,7 @@ log = logging.getLogger("tamigo_intel")
 
 SOURCE_TYPES = {
     "contracts_finder": ContractsFinderSource,
+    "find_tender": FindTenderSource,
     "usaspending": UsaSpendingSource,
     "canada_buys": CanadaBuysSource,
     "ted": TedSource,
@@ -180,40 +186,57 @@ def run_search(
     reports: list[dict] = []
     seen_orgs: set[int] = set()
     chosen = build_sources(config) if sources is None else list(sources)
+    run_config = replace(config, keywords=query_keywords(config))
     try:
         if not chosen:
             lines.append("Nijedan izvor nije uključen, pa nema uspešnog upita.")
+            progress(lines[-1])
+        if run_config.multilingual:
+            lines.append("Višejezične reči su dodate uz korisnikove ključne reči.")
+            progress(lines[-1])
+        elif run_config.restrict_countries:
+            lines.append("Filter zemlje je uključen. Stari zapisi se ne brišu.")
             progress(lines[-1])
         for source in chosen:
             cancel.raise_if_cancelled()
             progress(f"Izvor {source.name} počinje.")
             try:
-                items = source.search(config, client)
+                items = source.search(run_config, client)
             except Cancelled:
                 raise
             except SourceUnavailable as exc:
-                message = _safe(exc, config)
+                message = _failure_message(exc, config, "configuration")
                 db.set_source_state(source.name, "unavailable", message, 0)
-                reports.append({"name": source.name, "status": "unavailable", "count": 0, "error": message})
+                reports.append(
+                    {"name": source.name, "status": "unavailable", "count": 0, "error": message, "error_kind": "configuration"}
+                )
                 lines.append(f"{source.name}: nedostupan. {message}")
                 progress(lines[-1])
                 continue
             except (HttpError, OSError, ValueError, KeyError) as exc:
-                message = _safe(exc, config)
+                kind = failure_kind(exc)
+                message = _failure_message(exc, config, kind)
                 db.set_source_state(source.name, "failed", message, 0)
-                reports.append({"name": source.name, "status": "failed", "count": 0, "error": message})
+                reports.append(
+                    {"name": source.name, "status": "failed", "count": 0, "error": message, "error_kind": kind}
+                )
                 lines.append(f"{source.name}: greška. {message}")
                 progress(lines[-1])
                 continue
             stored_here = 0
+            skipped_country = 0
             with db.connect() as conn:
                 for item in items:
                     cancel.raise_if_cancelled()
-                    if _excluded(item, config):
+                    if _excluded(item, run_config):
                         continue
-                    if len(seen_orgs) >= config.max_organizations:
+                    if not country_allowed(item.country, run_config.selected_countries, run_config.restrict_countries):
+                        skipped_country += 1
+                        continue
+                    if len(seen_orgs) >= run_config.max_organizations:
                         break
-                    org_id = _store(db, conn, item, config)
+                    _remember_term(item, run_config.keywords)
+                    org_id = _store(db, conn, item, run_config)
                     conn.commit()
                     if org_id and org_id not in seen_orgs:
                         seen_orgs.add(org_id)
@@ -223,7 +246,10 @@ def run_search(
             reports.append(
                 {"name": source.name, "status": "ok", "count": len(items), "stored": stored_here, "error": ""}
             )
-            lines.append(f"{source.name}: uspeo, odgovor {len(items)}, sačuvanih ustanova {stored_here}.")
+            lines.append(
+                f"{source.name}: uspeo, odgovor {len(items)}, sačuvanih ustanova {stored_here}, "
+                f"van izabranih zemalja {skipped_country}."
+            )
             progress(lines[-1])
             if len(seen_orgs) >= config.max_organizations:
                 lines.append("Dostignut je zadati maksimum ustanova. Ostali izvori nisu pitani i nisu neuspeh.")
@@ -250,6 +276,20 @@ def run_search(
         lines.append(message)
         db.finish_run(run_id, "error", "\n".join(lines), message)
         raise
+
+
+def _failure_message(exc: Exception, config: SearchConfig, kind: str) -> str:
+    return f"{failure_label(kind)} {_safe(exc, config)}"
+
+
+def _remember_term(item: Discovered, keywords: list[str]) -> None:
+    term = first_matching_term(f"{item.title} {item.excerpt}", keywords)
+    if not term:
+        return
+    raw = dict(item.raw)
+    raw["matched_term"] = term
+    raw["matched_language"] = language_of_term(term)
+    item.raw = raw
 
 
 def _safe(exc: Exception, config: SearchConfig) -> str:

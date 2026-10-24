@@ -40,8 +40,11 @@ Apple Silicon arhiva **Tamigo-macos-apple-silicon** iz istog prolaza nije paket 
 | USAspending | `POST /api/v2/search/spending_by_award/` | Lid je **naručilac**, ne primalac ugovora. Dodela znači da su ovu vrstu rada već kupili. |
 | CanadaBuys | zvanični CSV otvorenih oglasa i najviše dve poslednje fiskalne godine dodela | Lid je naručilac ili navedeni krajnji korisnik, ne dobavljač. Stranica zapisa je `canadabuys.canada.ca`. Nula u iznosu znači da iznos nije objavljen. Starije godine se ne vuku u istom prolazu. |
 | TED | `POST https://api.ted.europa.eu/v3/notices/search` | Čuva se naslov i kupac. Tekst oglasa van naslova se ne preuzima. Samo objava mlađa od 45 dana računa se kao moguće otvoren poziv, jer status nije u odgovoru. |
-| GitHub issues | javna pretraga issue-a | Nivo C. Vlasnik repozitorijuma nije automatski klijent. |
+| GitHub issues | javna pretraga issue-a | Nivo C. Vlasnik repozitorijuma nije automatski klijent. Nije izvor za jednu zemlju. |
 | SAM.gov | ugrađen poziv | **Ne radi bez API ključa** sa [api.data.gov](https://api.data.gov/). Bez ključa izvor se preskače i to piše u pregledu. |
+| Find a Tender (UK) | zvanični OCDS `ocdsReleasePackages` | Podrazumevano isključen. Čitaju se najnovija izdanja, najviše četiri stranice, pa lokalni filter. Nije pretraga cele arhive. HTML oglasa sa ove mreže 24. oktobra 2026. vraća HTTP 403. API je iste večeri vratio HTTP 200. 403 ovde nije greška sertifikata. |
+
+Izbor zemlje je odvojen od izbora izvora. Filter zemlje je podrazumevano isključen, pa se i dalje čuvaju sve zemlje koje izvor vrati. Uključivanje filtera ne briše stare zapise. Višejezične fraze se dodaju samo kad se to uključi. Nacionalni portali (bund.de, TenderNed, BOAMP, ANAC, ANKÖ, udbud.dk, HILMA, simap.ch, e-JN, eTenders, AusTender) nisu povezani. CanadaBuys otvoreni CSV je 24. oktobra 2026. posle 04:30 po beogradskom vremenu sa ove mreže vratio HTTP 200 i zaglavlje CSV-a.
 
 Kanada, primer iz fajla dodela 2026–2027, pročitan 23. oktobra 2026. Oba su istorijske dodele, ne otvoreni pozivi:
 

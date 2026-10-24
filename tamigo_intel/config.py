@@ -66,6 +66,10 @@ class SearchConfig:
     openai_api_key: str = ""
     openai_base_url: str = ""
     schedule_hours: int = 0
+    selected_countries: list[str] = field(default_factory=lambda: ["US", "CA", "GB", "AU"])
+    restrict_countries: bool = False
+    search_languages: list[str] = field(default_factory=lambda: ["en"])
+    multilingual: bool = False
 
     def to_public_dict(self) -> dict:
         data = asdict(self)

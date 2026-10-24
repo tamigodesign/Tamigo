@@ -43,7 +43,8 @@ class TedSource:
                 clauses.append(f"(notice-title ~ {safe})")
         if not clauses:
             return []
-        query = " OR ".join(clauses[:8])
+        cap = 12 if config.multilingual else 8
+        query = " OR ".join(clauses[:cap])
         payload = {
             "query": query,
             "fields": ["publication-number", "publication-date", "notice-title", "buyer-name", "buyer-country"],

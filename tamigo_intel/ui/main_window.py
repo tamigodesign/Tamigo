@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -33,6 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tamigo_intel.classification import evidence_label, opportunity_label
 from tamigo_intel.config import (
     DEFAULT_RECENCY_DAYS,
     INTERVAL_MAX,
@@ -47,8 +50,10 @@ from tamigo_intel.config import (
     save_config,
     validate_limits,
 )
+from tamigo_intel.countries import COUNTRIES, PRESETS, preset_codes
 from tamigo_intel.db import Database
 from tamigo_intel.exporting import export_csv, export_json
+from tamigo_intel.languages import LANGUAGE_NAMES
 from tamigo_intel.legal import hints_for
 from tamigo_intel.maintenance import DELETE_ALL_TEXT, DELETE_SELECTED_TEXT, DeletionRefused, delete_all_if_confirmed, delete_selected_if_confirmed
 from tamigo_intel.paths import backup_dir, db_path
@@ -265,6 +270,7 @@ class MainWindow(QMainWindow):
                 ("ted", "TED (EU)"),
                 ("github_issues", "GitHub issues"),
                 ("sam_gov", "SAM.gov (traži ključ)"),
+                ("find_tender", "Find a Tender (UK, podrazumevano isključen)"),
             )
         ):
             box = QCheckBox(title)
@@ -272,6 +278,8 @@ class MainWindow(QMainWindow):
             self.source_boxes[name] = box
             source_grid.addWidget(box, index // 3, index % 3)
         layout.addLayout(source_grid)
+        layout.addWidget(self._build_countries())
+        layout.addWidget(self._build_languages())
         buttons = QHBoxLayout()
         self.saved_name = QLineEdit()
         self.saved_name.setPlaceholderText("Ime sačuvane pretrage")
@@ -296,6 +304,113 @@ class MainWindow(QMainWindow):
         self.search_log.setPlaceholderText("Ishod pretrage i greška po izvoru pojavljuju se ovde.")
         layout.addWidget(self.search_log)
         return page
+
+    def _build_countries(self) -> QWidget:
+        box = QGroupBox("Zemlje")
+        layout = QVBoxLayout(box)
+        note = QLabel(
+            "Zemlja i izvor biraju se odvojeno. Jedan izvor ne znači da je zemlja pokrivena cela. "
+            "Filter je podrazumevano isključen, pa postojeća pretraga i dalje čuva sve zemlje koje izvor vrati. "
+            "Uključivanje filtera ne briše sačuvane zapise."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        self.country_search = QLineEdit()
+        self.country_search.setPlaceholderText("Traži zemlju")
+        self.country_search.textChanged.connect(self._filter_country_list)
+        layout.addWidget(self.country_search)
+        presets = QHBoxLayout()
+        for key, title in PRESETS.items():
+            button = QPushButton(title)
+            button.clicked.connect(partial(self.apply_country_preset, key))
+            presets.addWidget(button)
+        layout.addLayout(presets)
+        self.country_list = QListWidget()
+        self.country_list.setMaximumHeight(160)
+        selected = {code.upper() for code in self.config.selected_countries}
+        for country in COUNTRIES:
+            item = QListWidgetItem(f"{country['name']} ({country['code']}) — {country['coverage']}")
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if country["code"] in selected else Qt.CheckState.Unchecked
+            )
+            item.setData(Qt.ItemDataRole.UserRole, country["code"])
+            item.setToolTip(country["coverage"])
+            self.country_list.addItem(item)
+        self.country_list.itemChanged.connect(lambda _item: self._refresh_country_summary())
+        layout.addWidget(self.country_list)
+        self.restrict_countries = QCheckBox("Ograniči pretragu na izabrane zemlje")
+        self.restrict_countries.setChecked(bool(self.config.restrict_countries))
+        self.restrict_countries.setToolTip(
+            "Isključeno: izvori vraćaju svoje zemlje kao do sada. Uključeno: novi zapisi su samo za izabrane zemlje."
+        )
+        self.restrict_countries.toggled.connect(lambda _checked: self._refresh_country_summary())
+        layout.addWidget(self.restrict_countries)
+        self.country_summary = QLabel("")
+        self.country_summary.setWordWrap(True)
+        layout.addWidget(self.country_summary)
+        remember = QPushButton("Zapamti izbor zemalja i period")
+        remember.setToolTip("Upisuje izbor u lokalna podešavanja. Ne briše lidove ni ključeve.")
+        remember.clicked.connect(self.persist_search_preferences)
+        layout.addWidget(remember)
+        self._refresh_country_summary()
+        return box
+
+    def _build_languages(self) -> QWidget:
+        box = QGroupBox("Jezik pretrage")
+        layout = QVBoxLayout(box)
+        self.multilingual = QCheckBox("Dodaj reči na izabranim jezicima uz ključne reči")
+        self.multilingual.setChecked(bool(self.config.multilingual))
+        self.multilingual.setToolTip(
+            "Isključeno: šalju se samo reči iz polja iznad. Uključeno: dodaju se fraze iz rečnika, najviše 16 ukupno."
+        )
+        layout.addWidget(self.multilingual)
+        row = QHBoxLayout()
+        self.language_boxes: dict[str, QCheckBox] = {}
+        selected = {code for code in self.config.search_languages}
+        for code, name in LANGUAGE_NAMES.items():
+            choice = QCheckBox(name)
+            choice.setChecked(code in selected)
+            self.language_boxes[code] = choice
+            row.addWidget(choice)
+        layout.addLayout(row)
+        return box
+
+    def _filter_country_list(self, text: str) -> None:
+        query = text.casefold().strip()
+        for index in range(self.country_list.count()):
+            item = self.country_list.item(index)
+            item.setHidden(bool(query) and query not in item.text().casefold())
+
+    def _selected_country_codes(self) -> list[str]:
+        codes: list[str] = []
+        for index in range(self.country_list.count()):
+            item = self.country_list.item(index)
+            if item.checkState() == Qt.CheckState.Checked:
+                codes.append(str(item.data(Qt.ItemDataRole.UserRole)))
+        return codes
+
+    def _set_country_checks(self, codes: list[str]) -> None:
+        chosen = {str(code).upper() for code in codes}
+        self.country_list.blockSignals(True)
+        for index in range(self.country_list.count()):
+            item = self.country_list.item(index)
+            code = str(item.data(Qt.ItemDataRole.UserRole))
+            item.setCheckState(Qt.CheckState.Checked if code in chosen else Qt.CheckState.Unchecked)
+        self.country_list.blockSignals(False)
+        self._refresh_country_summary()
+
+    def apply_country_preset(self, name: str, _checked: bool = False) -> None:
+        self._set_country_checks(preset_codes(name))
+
+    def _refresh_country_summary(self) -> None:
+        codes = self._selected_country_codes()
+        shown = ", ".join(codes) if codes else "nijedna"
+        if self.restrict_countries.isChecked():
+            text = f"Filter je uključen. Novi zapisi: {shown}. Stari zapisi ostaju."
+        else:
+            text = f"Filter zemlje je isključen. Izvori vraćaju svoje zemlje. Zapamćen izbor: {shown}."
+        self.country_summary.setText(text)
 
     def _build_leads(self) -> QWidget:
         page = QWidget()
@@ -523,6 +638,10 @@ class MainWindow(QMainWindow):
         config.recency_days = self.recency.value()
         config.request_interval_seconds = float(self.interval.value())
         config.enabled_sources = [name for name, box in self.source_boxes.items() if box.isChecked()]
+        config.selected_countries = self._selected_country_codes()
+        config.restrict_countries = self.restrict_countries.isChecked()
+        config.multilingual = self.multilingual.isChecked()
+        config.search_languages = [code for code, box in self.language_boxes.items() if box.isChecked()]
         return config
 
     def save_current_search(self) -> None:
@@ -562,6 +681,16 @@ class MainWindow(QMainWindow):
         enabled = set(data.get("enabled_sources") or [])
         for name, box in self.source_boxes.items():
             box.setChecked(name in enabled)
+        if "selected_countries" in data:
+            self._set_country_checks(list(data.get("selected_countries") or []))
+        if "restrict_countries" in data:
+            self.restrict_countries.setChecked(bool(data.get("restrict_countries")))
+        if "multilingual" in data:
+            self.multilingual.setChecked(bool(data.get("multilingual")))
+        if "search_languages" in data:
+            chosen = {str(code) for code in data.get("search_languages") or []}
+            for code, box in self.language_boxes.items():
+                box.setChecked(code in chosen)
         self.statusBar().showMessage("Sačuvana pretraga je učitana. Ključevi nisu u tom zapisu.")
 
     def _assign_int_spin(self, spin: QSpinBox, value: object, label: str, notify: bool = True) -> bool:
@@ -601,6 +730,10 @@ class MainWindow(QMainWindow):
         if not config.enabled_sources:
             QMessageBox.warning(self, "Pretraga", "Uključite bar jedan izvor. Pretraga nije pokrenuta.")
             return
+        if config.restrict_countries and not config.selected_countries:
+            QMessageBox.warning(self, "Pretraga", "Filter zemlje je uključen, a nijedna zemlja nije izabrana.")
+            return
+        self.persist_search_preferences()
         self.thread = SearchThread(str(self.db.path), config)
         self.thread.progress.connect(self.append_log)
         self.thread.finished_ok.connect(self.search_finished)
@@ -637,6 +770,16 @@ class MainWindow(QMainWindow):
         self.refresh_dashboard()
         self.reload_leads()
         self.statusBar().showMessage(outcome_label(status))
+
+    def persist_search_preferences(self) -> None:
+        try:
+            self.current_config_from_form()
+            save_config(self.config, self.config_file, self.vault)
+        except Exception as exc:
+            secrets = [str(getattr(self.config, name) or "") for name in SECRET_FIELDS]
+            QMessageBox.warning(self, "Podešavanja", "Izbor nije sačuvan. " + redact(str(exc), secrets))
+            return
+        self.statusBar().showMessage("Izbor zemalja i period su sačuvani. Lidovi nisu dirani.")
 
     def show_saved_searches(self) -> None:
         self.tabs.setCurrentWidget(self.search_page)
@@ -758,6 +901,8 @@ class MainWindow(QMainWindow):
             f"<p>{lead['country']} · {lead['category'] or 'kategorija nije utvrđena'} "
             f"({lead['category_verification']}) · nivo {lead['evidence_level']} · bodovi {lead['total_score']}</p>",
             "<p><b>Ovo nije ocena neusklađenosti.</b></p>",
+            f"<p>{evidence_label(lead['evidence_level'], lead['procurement_signal'])}. "
+            f"{opportunity_label(lead['procurement_signal'])}.</p>",
             f"<p>{lead['summary'].replace(chr(10), '<br>')}</p>",
             "<h3>Zašto ovi bodovi</h3>",
             f"<pre>{lead['score_explanation']}</pre>",
@@ -853,6 +998,7 @@ class MainWindow(QMainWindow):
                 setattr(self.config, field_name, typed)
 
     def save_settings(self) -> None:
+        self.current_config_from_form()
         self.config.priority_countries = _split(self.priority.text())
         self.config.deprioritized_countries = _split(self.deprioritized.text())
         self.config.excluded_names = _split(self.excluded.text())

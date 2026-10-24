@@ -4,6 +4,7 @@ import csv
 import json
 from pathlib import Path
 
+from tamigo_intel.classification import evidence_label, opportunity_label
 from tamigo_intel.db import Database
 from tamigo_intel.terms import procurement_label
 
@@ -41,6 +42,8 @@ def export_json(db: Database, destination: Path, qualified_only: bool = False) -
                 "next_action": lead["next_action"],
                 "email": email,
                 "email_verification": verification,
+                "evidence_class": evidence_label(lead["evidence_level"], lead["procurement_signal"]),
+                "opportunity_status": opportunity_label(lead["procurement_signal"]),
                 "evidence": [
                     {
                         "title": item["title"],
@@ -80,6 +83,8 @@ def export_csv(db: Database, destination: Path, qualified_only: bool = False) ->
         "discovered_at",
         "limitations",
         "next_action",
+        "evidence_class",
+        "opportunity_status",
     ]
     with destination.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -108,6 +113,8 @@ def export_csv(db: Database, destination: Path, qualified_only: bool = False) ->
                     "discovered_at": " | ".join(item["discovered_at"] or "" for item in bundle["evidence"]),
                     "limitations": " | ".join(item["limitations"] for item in bundle["evidence"]),
                     "next_action": lead["next_action"],
+                    "evidence_class": evidence_label(lead["evidence_level"], lead["procurement_signal"]),
+                    "opportunity_status": opportunity_label(lead["procurement_signal"]),
                 }
             )
     return len(bundles)

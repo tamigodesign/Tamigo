@@ -9,6 +9,7 @@ STATUS_LABELS = {
     "failed": "Pretraga nije uspela. Nijedan uključeni izvor nije uspešno odgovorio.",
     "cancelled": "Pretraga je zaustavljena. Sačuvani zapisi ostaju.",
     "error": "Pretraga je prekinuta greškom.",
+    "needs_configuration": "Pretraga čeka podešavanje. Nijedan uključeni izvor nije mogao da se pozove.",
     "completed": "Stariji zapis: pretraga je označena kao završena.",
 }
 
@@ -18,9 +19,13 @@ def outcome_label(status: str) -> str:
 
 
 def overall_status(reports: list[dict], stored: int) -> str:
+    if not reports:
+        return "failed"
     ok = [item for item in reports if item.get("status") == "ok"]
     failed = [item for item in reports if item.get("status") != "ok"]
     if not ok:
+        if all(item.get("status") == "unavailable" for item in reports):
+            return "needs_configuration"
         return "failed"
     if failed:
         return "partial"
